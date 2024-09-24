@@ -32,3 +32,43 @@
         }
       ]
     }
+a
+
+{
+    "name": "è½»æ¾ç­¾æº",
+    "identifier": "xyz.yyyue.esign",
+    "sourceURL": "https://esign.yyyue.xyz/apps.json",
+    "apps": [
+        {
+            "name": "è½»æ¾ç­¾-ESign",
+            "bundleIdentifier": "p3.xyz.yyyue.esign",
+            "developerName": "yyy",
+            "version": "5.0.2",
+            "versionDate": "2024-01-28T21:40:00+08:00",
+            "versionDescription": "ä¼˜åŒ–æ³¨å…¥dylibçš„åŠŸèƒ½\nä¿®å¤éƒ¨åˆ†BUG\nOptimizes the functionality injected into dylib\nfix bug",
+            "downloadURL": "https://pan.yyyue.xyz/d/esign/esign_5.0.2_unsigned.ipa",
+            "localizedDescription": "è½»æ¾ç­¾æ˜¯ä¸€æ¬¾å…è¶Šç‹±å¯ç»™ipaç­¾åçš„å·¥å…·ï¼Œå…·æœ‰æ³¨å…¥åº“ï¼ŒåŽ»åº“ç­‰åŠŸèƒ½ã€‚",
+            "iconURL": "https://esign.yyyue.xyz/ESignLogo200.png",
+            "tintColor": "018084",
+            "isLanZouCloud": 0,
+            "size": 7206362,
+            "type": 1
+        },
+        
+        {
+            "name": "è½»æ¾ç­¾-ESign",
+            "bundleIdentifier": "p3.xyz.yyyue.esign",
+            "developerName": "yyy",
+            "version": "4.8.2",
+            "versionDate": "2023-06-16T22:20:00+08:00",
+            "versionDescription": "æ›´æ–°æœ¬åœ°å®‰è£…çš„httpsè¯ä¹¦\nreplace the local install https cert\nfix bug",
+            "downloadURL": "https://pan.yyyue.xyz/d/esign/esign_4.8.2_unsigned.ipa",
+            "localizedDescription": "è½»æ¾ç­¾æ˜¯ä¸€æ¬¾å…è¶Šç‹±å¯ç»™ipaç­¾åçš„å·¥å…·ï¼Œå…·æœ‰æ³¨å…¥åº“ï¼ŒåŽ»åº“ç­‰åŠŸèƒ½ã€‚",
+            "iconURL": "https://esign.yyyue.xyz/ESignLogo200.png",
+            "tintColor": "018084",
+            "isLanZouCloud": 0,
+            "size": 7206362,
+            "type": 1
+        }
+    ]
+}
