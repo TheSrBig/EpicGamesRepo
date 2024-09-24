@@ -1,5 +1,3 @@
-{
-  "apps": [
     {
       "name": "Fortnite",
       "bundleIdentifier": "com.epicgames.FortniteGame",
@@ -34,5 +32,3 @@
         }
       ]
     }
-  ]
-}
