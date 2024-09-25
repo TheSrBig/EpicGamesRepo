@@ -8,13 +8,13 @@
             "bundleIdentifier": "com.epicgames.FortniteGame",
             "developerName": "Epic Games",
             "version": "31.20.1",
-            "versionDate": "2024-01-28T21:40:00+08:00",
+            "versionDate": "2024-09-24T21:40:00+08:00",
             "versionDescription": "It’s Fortnite for iOS. There is no more to say.",
             "downloadURL": "https://github.com/ichitaso/EpicGamesIPA/releases/download/v1.0.0/Fortnite-31.20.1.ipa",
             "localizedDescription": "It’s Fortnite for iOS. There is no more to say.",
             "iconURL": "https://betaprofiles.dev/img/os-logo/fortnite-ios-logo.webp",
             "tintColor": "848ef9",
-            "size": 242640000,
+            "size": 271764889,
             "type": 1
         },
         
@@ -23,13 +23,13 @@
             "bundleIdentifier": "uk.co.mediatonic.fallguys",
             "developerName": "Mediatonic",
             "version": "11.2.1",
-            "versionDate": "2024-01-28T21:40:00+08:00",
+            "versionDate": "2024-09-24T21:40:00+08:00",
             "versionDescription": "Fall Guys on iOS.",
             "downloadURL": "https://github.com/ichitaso/EpicGamesIPA/releases/download/v1.0.0/Fall-Guys-11.2.1.ipa",
             "localizedDescription": "Fall Guys on iOS.",
             "iconURL": "https://cdn2.unrealengine.com/fall-guys-app-icon-512x512-b418753a0c42.png",
             "tintColor": "848ef9",
-            "size": 242640000,
+            "size": 1904212879,
             "type": 1
         }
     ]
