@@ -62,10 +62,8 @@ def getArgs():
         print(f'{ERROR}: CivitAI API key must be at least 32 characters long.')
         return None, None, None
 
-    if not arg3: 
-        arg3 = ''
-    if re.search(r'\s+', arg3): 
-        arg3 = ''
+    if not arg3: arg3 = ''
+    if re.search(r'\s+', arg3): arg3 = ''
 
     selected_ui = next(option for option in WEBUI_LIST if arg1 == option.lower())
     return selected_ui, arg2, arg3
@@ -94,29 +92,23 @@ def getPython():
     p.wait()
 
     SyS(f'pv {fn} | lz4 -d | tar -xf -')
-    # FIX: borrar el archivo local correcto (no "/{fn}")
-    Path(fn).unlink(missing_ok=True)
+    Path(f'/{fn}').unlink()
 
     sys.path.insert(0, PKG)
-    # Usar get() para evitar KeyError si PATH/PYTHONPATH no existen
-    if BIN not in iRON.get('PATH', ''): 
-        iRON['PATH'] = BIN + ':' + iRON.get('PATH', '')
-    if PKG not in iRON.get('PYTHONPATH', ''): 
-        iRON['PYTHONPATH'] = PKG + ':' + iRON.get('PYTHONPATH', '')
+    if BIN not in iRON['PATH']: iRON['PATH'] = BIN + ':' + iRON['PATH']
+    if PKG not in iRON['PYTHONPATH']: iRON['PYTHONPATH'] = PKG + ':' + iRON['PYTHONPATH']
 
     if ENVNAME == 'Kaggle':
         for cmd in [
             'pip install ipywidgets jupyterlab_widgets --upgrade',
             'rm -f /usr/lib/python3.10/sitecustomize.py'
-        ]:
-            SyS(f'{cmd} >/dev/null 2>&1')
+        ]: SyS(f'{cmd} >/dev/null 2>&1')
 
 def marking(p, n, u):
     t = p / n
     v = {'ui': u, 'launch_args': '', 'tunnel': ''}
 
-    if not t.exists(): 
-        t.write_text(json.dumps(v, indent=4))
+    if not t.exists(): t.write_text(json.dumps(v, indent=4))
 
     d = json.loads(t.read_text())
     d.update(v)
@@ -145,8 +137,7 @@ def install_tunnel():
     }
 
     for n, b in bins.items():
-        if b['bin'].exists(): 
-            b['bin'].unlink()
+        if b['bin'].exists(): b['bin'].unlink()
 
         url = b['url']
         name = Path(url).name
@@ -154,13 +145,6 @@ def install_tunnel():
         SyS(f'wget -qO {name} {url}')
         SyS(f'tar -xzf {name} -C {USR}')
         SyS(f'rm -f {name}')
-
-def _safe_symlink(src: Path, dst: Path):
-    # elimina destino si ya existe (archivo, carpeta o symlink) y luego crea el symlink
-    if dst.is_symlink() or dst.exists():
-        SyS(f'rm -rf {dst}')
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    SyS(f'ln -s {src} {dst}')
 
 def sym_link(U, M):
     configs = {
@@ -256,16 +240,9 @@ def sym_link(U, M):
     }
 
     cfg = configs.get(U)
-    # Ejecutar limpiados
-    for cmd in cfg['sym']:
-        SyS(cmd)
-    # A1111/Forge/ReForge/Forge-Classic requieren carpetas extra
-    if U not in ['ComfyUI', 'SwarmUI']:
-        for d in ['Lora', 'ESRGAN']:
-            (M / d).mkdir(parents=True, exist_ok=True)
-    # Enlaces seguros
-    for src, tg in cfg['links']:
-        _safe_symlink(src, tg)
+    [SyS(f'{cmd}') for cmd in cfg['sym']]
+    if U not in ['ComfyUI', 'SwarmUI']: [(M / d).mkdir(parents=True, exist_ok=True) for d in ['Lora', 'ESRGAN']]
+    [SyS(f'ln -s {src} {tg}') for src, tg in cfg['links']]
 
 def webui_req(U, W, M):
     CD(W)
@@ -305,8 +282,7 @@ def webui_req(U, W, M):
     ]
 
     line = scripts + upscalers
-    for item in line:
-        download(item)
+    for item in line: download(item)
 
     if U not in ['SwarmUI', 'ComfyUI']:
         e = 'jpg' if U == 'Forge-Classic' else 'png'
@@ -316,11 +292,9 @@ def webui_req(U, W, M):
             f'https://huggingface.co/gutris1/webui/resolve/main/misc/card-no-preview.png {W}/html card-no-preview.{e}',
             f'https://github.com/gutris1/segsmaker/raw/main/config/NoCrypt_miku.json {W}/tmp/gradio_themes',
             f'https://github.com/gutris1/segsmaker/raw/main/config/user.css {W} user.css'
-        ]:
-            download(ass)
+        ]: download(ass)
 
-        if U != 'Forge':
-            download(f'https://github.com/gutris1/segsmaker/raw/main/config/config.json {W} config.json')
+        if U != 'Forge': download(f'https://github.com/gutris1/segsmaker/raw/main/config/config.json {W} config.json')
 
 def webui_extension(U, W, M):
     EXT = W / 'custom_nodes' if U == 'ComfyUI' else W / 'extensions'
@@ -334,14 +308,12 @@ def webui_extension(U, W, M):
         for faces in [
             f'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth {M}/facerestore_models',
             f'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/GFPGANv1.4.pth {M}/facerestore_models'
-        ]:
-            download(faces)
+        ]: download(faces)
 
     else:
         say('<br><b>【{red} Installing Extensions{d} 】{red}</b>')
         clone(str(W / 'asd/extension.txt'))
-        if ENVNAME == 'Kaggle':
-            clone('https://github.com/gutris1/sd-image-encryption')
+        if ENVNAME == 'Kaggle': clone('https://github.com/gutris1/sd-image-encryption')
 
 def webui_installation(U, W):
     M = W / 'Models' if U == 'SwarmUI' else W / 'models'
@@ -355,19 +327,16 @@ def webui_installation(U, W):
         f'https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl.vae.safetensors {V} sdxl_vae.safetensors'
     ]
 
-    for i in extras:
-        download(i)
+    for i in extras: download(i)
     SyS(f"unzip -qo {W / 'embeddingsXL.zip'} -d {E} && rm {W / 'embeddingsXL.zip'}")
 
-    if U != 'SwarmUI':
-        webui_extension(U, W, M)
+    if U != 'SwarmUI': webui_extension(U, W, M)
 
 def webui_selection(ui):
     with output:
         output.clear_output(wait=True)
 
-        if ui in REPO:
-            (WEBUI, repo) = (HOME / ui, REPO[ui])
+        if ui in REPO: (WEBUI, repo) = (HOME / ui, REPO[ui])
         say(f'<b>【{{red}} Installing {WEBUI.name}{{d}} 】{{red}}</b>')
         clone(repo)
 
@@ -396,21 +365,16 @@ def webui_installer():
                     SyS('git pull origin main')
                 elif ui == 'Forge-Classic':
                     SyS('git pull origin classic')
-                with loading:
-                    loading.clear_output()
+                with loading: loading.clear_output()
     else:
         try:
             webui_selection(webui)
         except KeyboardInterrupt:
-            with loading:
-                loading.clear_output()
-            with output:
-                print('\nCanceled.')
+            with loading: loading.clear_output()
+            with output: print('\nCanceled.')
         except Exception as e:
-            with loading:
-                loading.clear_output()
-            with output:
-                print(f'\n{ERROR}: {e}')
+            with loading: loading.clear_output()
+            with output: print(f'\n{ERROR}: {e}')
 
 def notebook_scripts():
     z = [
@@ -421,16 +385,9 @@ def notebook_scripts():
         (MRK, f'wget -qO {MRK} https://github.com/gutris1/segsmaker/raw/main/script/marking.py')
     ]
 
-    for _p, cmd in z:
-        if not Path(_p).exists():
-            SyS(cmd)
+    [SyS(y) for x, y in z if not Path(x).exists()]
 
-    j = {
-        'ENVNAME': ENVNAME,
-        'HOMEPATH': HOME,
-        'TEMPPATH': TMP,
-        'BASEPATH': Path(ENVBASE)
-    }
+    j = {'ENVNAME': ENVNAME, 'HOMEPATH': HOME, 'TEMPPATH': TMP, 'BASEPATH': Path(ENVBASE)}
     text = '\n'.join(f"{k} = '{v}'" for k, v in j.items())
     Path(KANDANG).write_text(text)
 
@@ -438,12 +395,7 @@ def notebook_scripts():
     marking(SRC, MARKED, webui)
     sys.path.append(str(STR))
 
-    for scripts in [nenen, melon, KANDANG, MRK]:
-        get_ipython().run_line_magic('run', str(scripts))
-
-# =======================
-#   INICIO DE EJECUCIÓN
-# =======================
+    for scripts in [nenen, melon, KANDANG, MRK]: get_ipython().run_line_magic('run', str(scripts))
 
 ENVNAME, ENVBASE, ENVHOME = getENV()
 
@@ -461,8 +413,8 @@ IMG = 'https://github.com/gutris1/segsmaker/raw/main/script/loading.png'
 
 HOME = Path(ENVHOME)
 TMP = Path(ENVBASE) / 'temp'
-PY = Path('/GUTRIS1')
 
+PY = Path('/GUTRIS1')
 SRC = HOME / 'gutris1'
 MRK = SRC / 'marking.py'
 KEY = SRC / 'api-key.json'
@@ -474,7 +426,6 @@ nenen = STR / 'nenen88.py'
 melon = STR / 'melon00.py'
 KANDANG = STR / 'KANDANG.py'
 
-# Crear directorios necesarios
 TMP.mkdir(parents=True, exist_ok=True)
 SRC.mkdir(parents=True, exist_ok=True)
 
@@ -482,15 +433,11 @@ output = widgets.Output()
 loading = widgets.Output()
 
 webui, civitai_key, hf_read_token = getArgs()
-if civitai_key is None:
-    sys.exit()
+if civitai_key is None: sys.exit()
 
 display(output, loading)
-with loading:
-    display(Image(url=IMG))
-with output:
-    PY.exists() or getPython()
-
+with loading: display(Image(url=IMG))
+with output: PY.exists() or getPython()
 notebook_scripts()
 
 from nenen88 import clone, say, download, tempe, pull
