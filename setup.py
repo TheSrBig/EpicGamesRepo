@@ -27,61 +27,53 @@ WEBUI_LIST = ['A1111', 'Forge', 'ReForge', 'Forge-Classic', 'ComfyUI', 'SwarmUI'
 
 def getENV():
     env = {
-        'Colab': ('/content/drive/MyDrive/BigFutureWUI', '/content/drive/MyDrive/BigFutureWUI', 'COLAB_JUPYTER_TOKEN'),
+        'Colab': ('/content', '/content', 'COLAB_JUPYTER_TOKEN'),
         'Kaggle': ('/kaggle', '/kaggle/working', 'KAGGLE_DATA_PROXY_TOKEN')
     }
     for name, (base, home, var) in env.items():
         if var in iRON:
-            # Asegurar que el directorio de Drive existe
-            if name == 'Colab':
-                os.makedirs(base, exist_ok=True)
-                os.makedirs(home, exist_ok=True)
             return name, base, home
     return None, None, None
 
 def getArgs():
-    parser = argparse.ArgumentParser(description='WebUI Installer Script for Kaggle and Google Colab with Drive support')
+    parser = argparse.ArgumentParser(description='WebUI Installer Script for Kaggle and Google Colab with Google Drive support')
     parser.add_argument('--webui', required=True, help='available webui: A1111, Forge, ReForge, Forge-Classic, ComfyUI, SwarmUI')
     parser.add_argument('--civitai_key', required=True, help='your CivitAI API key')
     parser.add_argument('--hf_read_token', default=None, help='your Huggingface READ Token (optional)')
+    parser.add_argument('--drive_path', default=None, help='Google Drive path for installation')
 
     args, unknown = parser.parse_known_args()
 
     arg1 = args.webui.lower()
     arg2 = args.civitai_key.strip()
     arg3 = args.hf_read_token.strip() if args.hf_read_token else ''
+    arg4 = args.drive_path.strip() if args.drive_path else ''
 
     if not any(arg1 == option.lower() for option in WEBUI_LIST):
         print(f'{ERROR}: invalid webui option: "{args.webui}"')
         print(f'Available webui options: {", ".join(WEBUI_LIST)}')
-        return None, None, None
+        return None, None, None, None
 
     if not arg2:
         print(f'{ERROR}: CivitAI API key is missing.')
-        return None, None, None
+        return None, None, None, None
     if re.search(r'\s+', arg2):
         print(f'{ERROR}: CivitAI API key contains spaces "{arg2}" - not allowed.')
-        return None, None, None
+        return None, None, None, None
     if len(arg2) < 32:
         print(f'{ERROR}: CivitAI API key must be at least 32 characters long.')
-        return None, None, None
+        return None, None, None, None
 
     if not arg3: arg3 = ''
     if re.search(r'\s+', arg3): arg3 = ''
 
     selected_ui = next(option for option in WEBUI_LIST if arg1 == option.lower())
-    return selected_ui, arg2, arg3
+    return selected_ui, arg2, arg3, arg4
 
 def getPython():
     v = '3.11' if webui == 'Forge-Classic' else '3.10'
-    
-    # Usar Python del sistema de Colab pero crear directorios en Drive
-    BIN = '/usr/bin'  # Usar Python del sistema
-    PKG_SYSTEM = f'/usr/local/lib/python{v}/dist-packages'
-    
-    # Crear directorio para packages adicionales en Drive
-    PKG_DRIVE = str(ENVBASE / f'python_packages/lib/python{v}/site-packages')
-    os.makedirs(PKG_DRIVE, exist_ok=True)
+    BIN = str(PY / 'bin')
+    PKG = str(PY / f'lib/python{v}/site-packages')
 
     if webui in ['ComfyUI', 'SwarmUI']:
         url = 'https://huggingface.co/gutris1/webui/resolve/main/env/KC-ComfyUI-SwarmUI-Python310-Torch260-cu124.tar.lz4'
@@ -92,47 +84,27 @@ def getPython():
 
     fn = Path(url).name
 
-    CD(ENVBASE)
-    print(f"\n{ARROW} Setting up Python environment in Drive")
+    CD(Path(ENVBASE).parent)
+    print(f"\n{ARROW} installing Python Portable {'3.11.13' if webui == 'Forge-Classic' else '3.10.15'}")
 
-    # Verificar e instalar herramientas necesarias
-    print(f"{ARROW} Verificando dependencias del sistema...")
-    dependencies = ['aria2', 'pv', 'lz4']
-    for dep in dependencies:
-        check_cmd = f'which {dep}'
-        result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Instalando {dep}...")
-            SyS(f'apt-get update -qq && apt-get install -y -qq {dep}')
-    
-    # Verificar que aria2c esté disponible antes de usarlo
-    check_aria = subprocess.run('which aria2c', shell=True, capture_output=True, text=True)
-    if check_aria.returncode != 0:
-        print("Error: aria2c no está disponible. Usando wget como alternativa...")
-        SyS(f'wget -O {fn} {url}')
-    else:
-        # Descargar con aria2c
-        aria = f'aria2c --console-log-level=error --stderr=true -c -x16 -s16 -k1M -j5 {url} -o {fn}'
-        p = subprocess.Popen(shlex.split(aria), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        p.wait()
+    SyS('sudo apt-get -qq -y install aria2 pv lz4 >/dev/null 2>&1')
 
-    # Verificar que el archivo se descargó
-    if Path(fn).exists():
-        SyS(f'pv {fn} | lz4 -d | tar -xf -')
-        Path(fn).unlink()
-    else:
-        print(f"Error: No se pudo descargar {fn}")
+    aria = f'aria2c --console-log-level=error --stderr=true -c -x16 -s16 -k1M -j5 {url} -o {fn}'
+    p = subprocess.Popen(shlex.split(aria), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    p.wait()
 
-    # Añadir tanto el sistema como Drive al path de Python
-    sys.path.insert(0, PKG_DRIVE)
-    sys.path.insert(0, PKG_SYSTEM)
-    
-    if PKG_DRIVE not in iRON.get('PYTHONPATH', ''): 
-        iRON['PYTHONPATH'] = PKG_DRIVE + ':' + iRON.get('PYTHONPATH', '')
+    SyS(f'pv {fn} | lz4 -d | tar -xf -')
+    Path(f'/{fn}').unlink()
 
-    # Instalar ipywidgets en Drive si es necesario
-    if ENVNAME == 'Colab':
-        SyS(f'pip install --target {PKG_DRIVE} ipywidgets jupyterlab_widgets --upgrade --quiet')
+    sys.path.insert(0, PKG)
+    if BIN not in iRON['PATH']: iRON['PATH'] = BIN + ':' + iRON['PATH']
+    if PKG not in iRON['PYTHONPATH']: iRON['PYTHONPATH'] = PKG + ':' + iRON['PYTHONPATH']
+
+    if ENVNAME == 'Kaggle':
+        for cmd in [
+            'pip install ipywidgets jupyterlab_widgets --upgrade',
+            'rm -f /usr/lib/python3.10/sitecustomize.py'
+        ]: SyS(f'{cmd} >/dev/null 2>&1')
 
 def marking(p, n, u):
     t = p / n
@@ -152,28 +124,16 @@ def key_inject(C, H):
     p.write_text(v)
 
 def install_tunnel():
-    # Instalar túneles en directorio temporal del sistema (no en Drive)
-    tunnel_dir = Path('/tmp/tunnels')
-    tunnel_dir.mkdir(exist_ok=True)
-    
-    # Verificar que wget esté disponible
-    check_wget = subprocess.run('which wget', shell=True, capture_output=True, text=True)
-    if check_wget.returncode != 0:
-        SyS('apt-get update -qq && apt-get install -y -qq wget')
-    
-    SyS(f'wget -qO {tunnel_dir}/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64')
-    SyS(f'chmod +x {tunnel_dir}/cl')
-    
-    # Crear enlaces simbólicos en /usr/bin
-    SyS(f'ln -sf {tunnel_dir}/cl /usr/bin/cl')
+    SyS(f'wget -qO {USR}/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64')
+    SyS(f'chmod +x {USR}/cl')
 
     bins = {
         'zrok': {
-            'bin': tunnel_dir / 'zrok',
+            'bin': USR / 'zrok',
             'url': 'https://github.com/openziti/zrok/releases/download/v1.0.6/zrok_1.0.6_linux_amd64.tar.gz'
         },
         'ngrok': {
-            'bin': tunnel_dir / 'ngrok',
+            'bin': USR / 'ngrok',
             'url': 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz'
         }
     }
@@ -184,13 +144,9 @@ def install_tunnel():
         url = b['url']
         name = Path(url).name
 
-        try:
-            SyS(f'wget -qO {tunnel_dir}/{name} {url}')
-            SyS(f'tar -xzf {tunnel_dir}/{name} -C {tunnel_dir}')
-            SyS(f'rm -f {tunnel_dir}/{name}')
-            SyS(f'ln -sf {tunnel_dir}/{n} /usr/bin/{n}')
-        except Exception as e:
-            print(f"Error instalando {n}: {e}")
+        SyS(f'wget -qO {name} {url}')
+        SyS(f'tar -xzf {name} -C {USR}')
+        SyS(f'rm -f {name}')
 
 def sym_link(U, M):
     configs = {
@@ -383,30 +339,14 @@ def webui_selection(ui):
         output.clear_output(wait=True)
 
         if ui in REPO: (WEBUI, repo) = (HOME / ui, REPO[ui])
-        say(f'<b>【{{red}} Installing {WEBUI.name} in Drive{{d}} 】{{red}}</b>')
+        say(f'<b>【{{red}} Installing {WEBUI.name}{{d}} 】{{red}}</b>')
         clone(repo)
 
         webui_installation(ui, WEBUI)
 
         with loading:
             loading.clear_output(wait=True)
-            say('<br><b>【{red} Done - Everything saved in Drive{d} 】{red}</b>')
-            
-            # Configurar variables de entorno para las celdas del notebook
-            iRON['WebUI'] = str(WEBUI)
-            iRON['Extensions'] = str(WEBUI / ('custom_nodes' if ui == 'ComfyUI' else 'extensions'))
-            
-            M = WEBUI / 'Models' if ui == 'SwarmUI' else WEBUI / 'models'
-            E = M / 'Embeddings' if ui == 'SwarmUI' else (M / 'embeddings' if ui in ['Forge-Classic', 'ComfyUI'] else WEBUI / 'embeddings')
-            V = M / 'vae' if ui == 'ComfyUI' else M / 'VAE'
-            U = M / 'upscale_models' if ui in ['ComfyUI', 'SwarmUI'] else M / 'ESRGAN'
-            
-            iRON['VAE'] = str(V)
-            iRON['Embeddings'] = str(E)
-            iRON['Upscalers'] = str(U)
-            iRON['CKPT'] = str(M / ('checkpoints' if ui == 'ComfyUI' else ('Stable-Diffusion' if ui == 'SwarmUI' else 'Stable-diffusion')))
-            iRON['LORA'] = str(M / ('loras' if ui == 'ComfyUI' else 'Lora'))
-            
+            say('<br><b>【{red} Done{d} 】{red}</b>')
             tempe()
             CD(HOME)
 
@@ -421,7 +361,6 @@ def webui_installer():
             CD(WEBUI)
             with output:
                 output.clear_output(wait=True)
-                say(f'<b>【{{red}} Updating {ui} in Drive{{d}} 】{{red}}</b>')
                 if ui in ['A1111', 'ComfyUI', 'SwarmUI']:
                     SyS('git pull origin master')
                 elif ui in ['Forge', 'ReForge']:
@@ -440,9 +379,6 @@ def webui_installer():
             with output: print(f'\n{ERROR}: {e}')
 
 def notebook_scripts():
-    # Crear directorios necesarios en Drive
-    STR.mkdir(parents=True, exist_ok=True)
-    
     z = [
         (STR / '00-startup.py', f'wget -qO {STR}/00-startup.py https://github.com/gutris1/segsmaker/raw/main/script/KC/00-startup.py'),
         (nenen, f'wget -qO {nenen} https://github.com/gutris1/segsmaker/raw/main/script/nenen88.py'),
@@ -477,18 +413,28 @@ ARROW = f'{ORANGE}▶{RESET}'
 ERROR = f'{PURPLE}[{RESET}{RED}ERROR{RESET}{PURPLE}]{RESET}'
 IMG = 'https://github.com/gutris1/segsmaker/raw/main/script/loading.png'
 
-# Cambiar todas las rutas para usar Drive
-HOME = Path(ENVHOME)
+# Modificación para Google Drive - obtener path del argumento
+webui, civitai_key, hf_read_token, drive_path = getArgs()
+if civitai_key is None: sys.exit()
+
+# Usar Google Drive path si se proporciona, sino usar default
+if drive_path and Path(drive_path).exists():
+    HOME = Path(drive_path)
+    print(f"🔗 Usando Google Drive: {HOME}")
+else:
+    HOME = Path(ENVHOME)
+    print(f"📂 Usando directorio local: {HOME}")
+
 TMP = HOME / 'temp'  # Temporal también en Drive para persistencia
 
-PY = Path('/GUTRIS1')  # Mantener Python portable en sistema
+PY = Path('/GUTRIS1')
 SRC = HOME / 'gutris1'
 MRK = SRC / 'marking.py'
 KEY = SRC / 'api-key.json'
 MARKED = SRC / 'marking.json'
 
 USR = Path('/usr/bin')
-STR = HOME / '.ipython/profile_default/startup'  # Scripts en Drive
+STR = Path('/root/.ipython/profile_default/startup')
 nenen = STR / 'nenen88.py'
 melon = STR / 'melon00.py'
 KANDANG = STR / 'KANDANG.py'
@@ -496,17 +442,40 @@ KANDANG = STR / 'KANDANG.py'
 TMP.mkdir(parents=True, exist_ok=True)
 SRC.mkdir(parents=True, exist_ok=True)
 
+# Crear variables de entorno para las rutas que usarán las otras celdas
+webui_path = HOME / webui
+models_path = webui_path / 'models'
+
+if webui == 'ComfyUI':
+    iRON['Extensions'] = str(webui_path / 'custom_nodes')
+    iRON['CKPT'] = str(models_path / 'checkpoints')
+    iRON['LORA'] = str(models_path / 'loras')
+    iRON['VAE'] = str(models_path / 'vae')
+    iRON['Embeddings'] = str(models_path / 'embeddings')
+    iRON['Upscalers'] = str(models_path / 'upscale_models')
+elif webui == 'SwarmUI':
+    iRON['Extensions'] = str(webui_path / 'extensions')
+    iRON['CKPT'] = str(models_path / 'Stable-Diffusion')
+    iRON['LORA'] = str(models_path / 'Lora')
+    iRON['VAE'] = str(models_path / 'VAE')
+    iRON['Embeddings'] = str(models_path / 'Embeddings')
+    iRON['Upscalers'] = str(models_path / 'upscale_models')
+else:  # A1111, Forge, ReForge, Forge-Classic
+    iRON['Extensions'] = str(webui_path / 'extensions')
+    iRON['CKPT'] = str(models_path / 'Stable-diffusion')
+    iRON['LORA'] = str(models_path / 'Lora')
+    iRON['VAE'] = str(models_path / 'VAE')
+    iRON['Embeddings'] = str(webui_path / 'embeddings')
+    iRON['Upscalers'] = str(models_path / 'ESRGAN')
+
+iRON['WebUI'] = str(webui_path)
+
 output = widgets.Output()
 loading = widgets.Output()
 
-webui, civitai_key, hf_read_token = getArgs()
-if civitai_key is None: sys.exit()
-
 display(output, loading)
 with loading: display(Image(url=IMG))
-with output: 
-    print(f"{ARROW} Using Drive directory: {HOME}")
-    PY.exists() or getPython()
+with output: PY.exists() or getPython()
 notebook_scripts()
 
 from nenen88 import clone, say, download, tempe, pull
