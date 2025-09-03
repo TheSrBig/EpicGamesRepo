@@ -378,7 +378,7 @@ def webui_extension(U, W, M):
     CD(EXT)
 
     if U == 'ComfyUI':
-        say('<br><b>ã€{red} Installing Custom Nodes{d} ã€'{red}</b>')
+        say('<br><b>Installing Custom Nodes</b>')
         clone(str(W / 'asd/custom_nodes.txt'))
         print()
 
@@ -388,7 +388,7 @@ def webui_extension(U, W, M):
         ]: download(faces)
 
     else:
-        say('<br><b>ã€{red} Installing Extensions{d} ã€'{red}</b>')
+        say('<br><b>Installing Extensions</b>')
         clone(str(W / 'asd/extension.txt'))
         if ENVNAME == 'Kaggle': clone('https://github.com/gutris1/sd-image-encryption')
 
@@ -417,9 +417,9 @@ def webui_selection(ui):
         WEBUI = webui_dir / ui
         
         if ui in REPO: repo = REPO[ui]
-        say(f'<b>ã€{{red}} Installing {WEBUI.name}{{d}} ã€'{{red}}</b>')
+        say(f'<b>Installing {WEBUI.name}</b>')
         if use_drive:
-            say(f'<b>ã€{{red}} Installing in Google Drive: {WEBUI}{{d}} ã€'{{red}}</b>')
+            say(f'<b>Installing in Google Drive: {WEBUI}</b>')
         
         clone(repo)
 
@@ -427,7 +427,7 @@ def webui_selection(ui):
 
         with loading:
             loading.clear_output(wait=True)
-            say('<br><b>ã€{red} Done{d} ã€'{red}</b>')
+            say('<br><b>Done</b>')
             tempe()
             CD(HOME)
 
@@ -521,7 +521,7 @@ RESET = '\033[0m'
 RED = '\033[31m'
 PURPLE = '\033[38;5;135m'
 ORANGE = '\033[38;5;208m'
-ARROW = f'{ORANGE}â–¶{RESET}'
+ARROW = f'{ORANGE}▶{RESET}'
 ERROR = f'{PURPLE}[{RESET}{RED}ERROR{RESET}{PURPLE}]{RESET}'
 IMG = 'https://github.com/gutris1/segsmaker/raw/main/script/loading.png'
 
@@ -568,7 +568,7 @@ loading = widgets.Output()
 
 display(output, loading)
 with loading: display(Image(url=IMG))
-with output: 
+with output:
     if not (DRIVE_BASE / 'python_env' if use_drive else Path('/GUTRIS1')).exists():
         getPython()
 
