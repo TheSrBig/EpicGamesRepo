@@ -36,12 +36,10 @@ def getENV():
     return None, None, None
 
 def getArgs():
-    parser = argparse.ArgumentParser(description='WebUI Installer Script for Kaggle and Google Colab with Drive Support')
+    parser = argparse.ArgumentParser(description='WebUI Installer Script for Kaggle and Google Colab')
     parser.add_argument('--webui', required=True, help='available webui: A1111, Forge, ReForge, Forge-Classic, ComfyUI, SwarmUI')
     parser.add_argument('--civitai_key', required=True, help='your CivitAI API key')
     parser.add_argument('--hf_read_token', default=None, help='your Huggingface READ Token (optional)')
-    parser.add_argument('--use_drive', action='store_true', help='Install in Google Drive instead of local storage')
-    parser.add_argument('--drive_path', default='/content/drive/MyDrive/BigFutureWUI', help='Path in Google Drive to install')
 
     args, unknown = parser.parse_known_args()
 
@@ -52,76 +50,30 @@ def getArgs():
     if not any(arg1 == option.lower() for option in WEBUI_LIST):
         print(f'{ERROR}: invalid webui option: "{args.webui}"')
         print(f'Available webui options: {", ".join(WEBUI_LIST)}')
-        return None, None, None, None, None
+        return None, None, None
 
     if not arg2:
         print(f'{ERROR}: CivitAI API key is missing.')
-        return None, None, None, None, None
+        return None, None, None
     if re.search(r'\s+', arg2):
         print(f'{ERROR}: CivitAI API key contains spaces "{arg2}" - not allowed.')
-        return None, None, None, None, None
+        return None, None, None
     if len(arg2) < 32:
         print(f'{ERROR}: CivitAI API key must be at least 32 characters long.')
-        return None, None, None, None, None
+        return None, None, None
 
-    if not arg3: arg3 = ''
-    if re.search(r'\s+', arg3): arg3 = ''
+    if not arg3: 
+        arg3 = ''
+    if re.search(r'\s+', arg3): 
+        arg3 = ''
 
     selected_ui = next(option for option in WEBUI_LIST if arg1 == option.lower())
-    return selected_ui, arg2, arg3, args.use_drive, args.drive_path
-
-def mount_drive():
-    """Mount Google Drive if not already mounted"""
-    drive_path = Path('/content/drive')
-    if not drive_path.exists():
-        print(f"{ARROW} Mounting Google Drive...")
-        try:
-            from google.colab import drive
-            drive.mount('/content/drive')
-            print(f"{ARROW} Google Drive mounted successfully")
-        except ImportError:
-            print(f"{ERROR}: Not running in Google Colab, cannot mount Drive")
-            return False
-        except Exception as e:
-            print(f"{ERROR}: Failed to mount Google Drive: {e}")
-            return False
-    else:
-        print(f"{ARROW} Google Drive already mounted")
-    return True
-
-def setup_drive_environment(drive_path):
-    """Setup the Drive environment structure"""
-    drive_base = Path(drive_path)
-    drive_base.mkdir(parents=True, exist_ok=True)
-    
-    # Create necessary directories in Drive
-    directories = [
-        'webui',
-        'models',
-        'temp',
-        'python_env',
-        'scripts'
-    ]
-    
-    for dir_name in directories:
-        (drive_base / dir_name).mkdir(parents=True, exist_ok=True)
-    
-    return drive_base
+    return selected_ui, arg2, arg3
 
 def getPython():
     v = '3.11' if webui == 'Forge-Classic' else '3.10'
-    
-    if use_drive:
-        # Install Python in Drive
-        PY_DRIVE = DRIVE_BASE / 'python_env'
-        BIN = str(PY_DRIVE / 'bin')
-        PKG = str(PY_DRIVE / f'lib/python{v}/site-packages')
-        PY = PY_DRIVE
-    else:
-        # Original local installation
-        PY = Path('/GUTRIS1')
-        BIN = str(PY / 'bin')
-        PKG = str(PY / f'lib/python{v}/site-packages')
+    BIN = str(PY / 'bin')
+    PKG = str(PY / f'lib/python{v}/site-packages')
 
     if webui in ['ComfyUI', 'SwarmUI']:
         url = 'https://huggingface.co/gutris1/webui/resolve/main/env/KC-ComfyUI-SwarmUI-Python310-Torch260-cu124.tar.lz4'
@@ -132,14 +84,8 @@ def getPython():
 
     fn = Path(url).name
 
-    if use_drive:
-        CD(DRIVE_BASE)
-    else:
-        CD(Path(ENVBASE).parent)
-    
+    CD(Path(ENVBASE).parent)
     print(f"\n{ARROW} installing Python Portable {'3.11.13' if webui == 'Forge-Classic' else '3.10.15'}")
-    if use_drive:
-        print(f"{ARROW} Installing in Google Drive: {PY}")
 
     SyS('sudo apt-get -qq -y install aria2 pv lz4 >/dev/null 2>&1')
 
@@ -147,28 +93,30 @@ def getPython():
     p = subprocess.Popen(shlex.split(aria), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     p.wait()
 
-    if use_drive:
-        SyS(f'pv {fn} | lz4 -d | tar -xf - -C {DRIVE_BASE / "python_env"}')
-    else:
-        SyS(f'pv {fn} | lz4 -d | tar -xf -')
-    
-    Path(fn).unlink()
+    SyS(f'pv {fn} | lz4 -d | tar -xf -')
+    # FIX: borrar el archivo local correcto (no "/{fn}")
+    Path(fn).unlink(missing_ok=True)
 
     sys.path.insert(0, PKG)
-    if BIN not in iRON['PATH']: iRON['PATH'] = BIN + ':' + iRON['PATH']
-    if PKG not in iRON['PYTHONPATH']: iRON['PYTHONPATH'] = PKG + ':' + iRON['PYTHONPATH']
+    # Usar get() para evitar KeyError si PATH/PYTHONPATH no existen
+    if BIN not in iRON.get('PATH', ''): 
+        iRON['PATH'] = BIN + ':' + iRON.get('PATH', '')
+    if PKG not in iRON.get('PYTHONPATH', ''): 
+        iRON['PYTHONPATH'] = PKG + ':' + iRON.get('PYTHONPATH', '')
 
     if ENVNAME == 'Kaggle':
         for cmd in [
             'pip install ipywidgets jupyterlab_widgets --upgrade',
             'rm -f /usr/lib/python3.10/sitecustomize.py'
-        ]: SyS(f'{cmd} >/dev/null 2>&1')
+        ]:
+            SyS(f'{cmd} >/dev/null 2>&1')
 
 def marking(p, n, u):
     t = p / n
-    v = {'ui': u, 'launch_args': '', 'tunnel': '', 'use_drive': use_drive, 'drive_path': str(DRIVE_BASE) if use_drive else ''}
+    v = {'ui': u, 'launch_args': '', 'tunnel': ''}
 
-    if not t.exists(): t.write_text(json.dumps(v, indent=4))
+    if not t.exists(): 
+        t.write_text(json.dumps(v, indent=4))
 
     d = json.loads(t.read_text())
     d.update(v)
@@ -182,57 +130,48 @@ def key_inject(C, H):
     p.write_text(v)
 
 def install_tunnel():
-    tunnel_dir = DRIVE_BASE / 'scripts' if use_drive else USR
-    tunnel_dir.mkdir(parents=True, exist_ok=True)
-    
-    SyS(f'wget -qO {tunnel_dir}/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64')
-    SyS(f'chmod +x {tunnel_dir}/cl')
+    SyS(f'wget -qO {USR}/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64')
+    SyS(f'chmod +x {USR}/cl')
 
     bins = {
         'zrok': {
-            'bin': tunnel_dir / 'zrok',
+            'bin': USR / 'zrok',
             'url': 'https://github.com/openziti/zrok/releases/download/v1.0.6/zrok_1.0.6_linux_amd64.tar.gz'
         },
         'ngrok': {
-            'bin': tunnel_dir / 'ngrok',
+            'bin': USR / 'ngrok',
             'url': 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz'
         }
     }
 
     for n, b in bins.items():
-        if b['bin'].exists(): b['bin'].unlink()
+        if b['bin'].exists(): 
+            b['bin'].unlink()
 
         url = b['url']
         name = Path(url).name
 
         SyS(f'wget -qO {name} {url}')
-        SyS(f'tar -xzf {name} -C {tunnel_dir}')
+        SyS(f'tar -xzf {name} -C {USR}')
         SyS(f'rm -f {name}')
-    
-    # Add tunnel directory to PATH if using Drive
-    if use_drive:
-        tunnel_bin = str(tunnel_dir)
-        if tunnel_bin not in iRON['PATH']: 
-            iRON['PATH'] = tunnel_bin + ':' + iRON['PATH']
+
+def _safe_symlink(src: Path, dst: Path):
+    # elimina destino si ya existe (archivo, carpeta o symlink) y luego crea el symlink
+    if dst.is_symlink() or dst.exists():
+        SyS(f'rm -rf {dst}')
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    SyS(f'ln -s {src} {dst}')
 
 def sym_link(U, M):
-    if use_drive:
-        # Use Drive temp directory
-        temp_dir = DRIVE_BASE / 'temp'
-    else:
-        temp_dir = TMP
-    
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
     configs = {
         'A1111': {
             'sym': [
-                f"rm -rf {M / 'Stable-diffusion/tmp_ckpt'} {M / 'Lora/tmp_lora'} {M / 'ControlNet'} {temp_dir}/*"
+                f"rm -rf {M / 'Stable-diffusion/tmp_ckpt'} {M / 'Lora/tmp_lora'} {M / 'ControlNet'} {TMP}/*"
             ],
             'links': [
-                (temp_dir / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
-                (temp_dir / 'lora', M / 'Lora/tmp_lora'),
-                (temp_dir / 'controlnet', M / 'ControlNet')
+                (TMP / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
+                (TMP / 'lora', M / 'Lora/tmp_lora'),
+                (TMP / 'controlnet', M / 'ControlNet')
             ]
         },
 
@@ -240,34 +179,34 @@ def sym_link(U, M):
             'sym': [
                 f"rm -rf {M / 'Stable-diffusion/tmp_ckpt'} {M / 'Lora/tmp_lora'} {M / 'ControlNet'}",
                 f"rm -rf {M / 'svd'} {M / 'z123'} {M / 'clip'} {M / 'clip_vision'} {M / 'diffusers'}",
-                f"rm -rf {M / 'diffusion_models'} {M / 'text_encoder'} {M / 'unet'} {temp_dir}/*"
+                f"rm -rf {M / 'diffusion_models'} {M / 'text_encoder'} {M / 'unet'} {TMP}/*"
             ],
             'links': [
-                (temp_dir / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
-                (temp_dir / 'lora', M / 'Lora/tmp_lora'),
-                (temp_dir / 'controlnet', M / 'ControlNet'),
-                (temp_dir / 'z123', M / 'z123'),
-                (temp_dir / 'svd', M / 'svd'),
-                (temp_dir / 'clip', M / 'clip'),
-                (temp_dir / 'clip_vision', M / 'clip_vision'),
-                (temp_dir / 'diffusers', M / 'diffusers'),
-                (temp_dir / 'diffusion_models', M / 'diffusion_models'),
-                (temp_dir / 'text_encoders', M / 'text_encoder'),
-                (temp_dir / 'unet', M / 'unet')
+                (TMP / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
+                (TMP / 'lora', M / 'Lora/tmp_lora'),
+                (TMP / 'controlnet', M / 'ControlNet'),
+                (TMP / 'z123', M / 'z123'),
+                (TMP / 'svd', M / 'svd'),
+                (TMP / 'clip', M / 'clip'),
+                (TMP / 'clip_vision', M / 'clip_vision'),
+                (TMP / 'diffusers', M / 'diffusers'),
+                (TMP / 'diffusion_models', M / 'diffusion_models'),
+                (TMP / 'text_encoders', M / 'text_encoder'),
+                (TMP / 'unet', M / 'unet')
             ]
         },
 
         'ReForge': {
             'sym': [
                 f"rm -rf {M / 'Stable-diffusion/tmp_ckpt'} {M / 'Lora/tmp_lora'} {M / 'ControlNet'}",
-                f"rm -rf {M / 'svd'} {M / 'z123'} {temp_dir}/*"
+                f"rm -rf {M / 'svd'} {M / 'z123'} {TMP}/*"
             ],
             'links': [
-                (temp_dir / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
-                (temp_dir / 'lora', M / 'Lora/tmp_lora'),
-                (temp_dir / 'controlnet', M / 'ControlNet'),
-                (temp_dir / 'z123', M / 'z123'),
-                (temp_dir / 'svd', M / 'svd')
+                (TMP / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
+                (TMP / 'lora', M / 'Lora/tmp_lora'),
+                (TMP / 'controlnet', M / 'ControlNet'),
+                (TMP / 'z123', M / 'z123'),
+                (TMP / 'svd', M / 'svd')
             ]
         },
 
@@ -276,9 +215,9 @@ def sym_link(U, M):
                 f"rm -rf {M / 'Stable-diffusion/tmp_ckpt'} {M / 'Lora/tmp_lora'} {M / 'ControlNet'}"
             ],
             'links': [
-                (temp_dir / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
-                (temp_dir / 'lora', M / 'Lora/tmp_lora'),
-                (temp_dir / 'controlnet', M / 'ControlNet')
+                (TMP / 'ckpt', M / 'Stable-diffusion/tmp_ckpt'),
+                (TMP / 'lora', M / 'Lora/tmp_lora'),
+                (TMP / 'controlnet', M / 'ControlNet')
             ]
         },
 
@@ -286,40 +225,47 @@ def sym_link(U, M):
             'sym': [
                 f"rm -rf {M / 'checkpoints/tmp_ckpt'} {M / 'loras/tmp_lora'} {M / 'controlnet'}",
                 f"rm -rf {M / 'clip'} {M / 'clip_vision'} {M / 'diffusers'} {M / 'diffusion_models'}",
-                f"rm -rf {M / 'text_encoders'} {M / 'unet'} {temp_dir}/*"
+                f"rm -rf {M / 'text_encoders'} {M / 'unet'} {TMP}/*"
             ],
             'links': [
-                (temp_dir / 'ckpt', M / 'checkpoints/tmp_ckpt'),
-                (temp_dir / 'lora', M / 'loras/tmp_lora'),
-                (temp_dir / 'controlnet', M / 'controlnet'),
-                (temp_dir / 'clip', M / 'clip'),
-                (temp_dir / 'clip_vision', M / 'clip_vision'),
-                (temp_dir / 'diffusers', M / 'diffusers'),
-                (temp_dir / 'diffusion_models', M / 'diffusion_models'),
-                (temp_dir / 'text_encoders', M / 'text_encoders'),
-                (temp_dir / 'unet', M / 'unet')
+                (TMP / 'ckpt', M / 'checkpoints/tmp_ckpt'),
+                (TMP / 'lora', M / 'loras/tmp_lora'),
+                (TMP / 'controlnet', M / 'controlnet'),
+                (TMP / 'clip', M / 'clip'),
+                (TMP / 'clip_vision', M / 'clip_vision'),
+                (TMP / 'diffusers', M / 'diffusers'),
+                (TMP / 'diffusion_models', M / 'diffusion_models'),
+                (TMP / 'text_encoders', M / 'text_encoders'),
+                (TMP / 'unet', M / 'unet')
             ]
         },
 
         'SwarmUI': {
             'sym': [
                 f"rm -rf {M / 'Stable-Diffusion/tmp_ckpt'} {M / 'Lora/tmp_lora'} {M / 'controlnet'}",
-                f"rm -rf {M / 'clip'} {M / 'unet'} {temp_dir}/*"
+                f"rm -rf {M / 'clip'} {M / 'unet'} {TMP}/*"
             ],
             'links': [
-                (temp_dir / 'ckpt', M / 'Stable-Diffusion/tmp_ckpt'),
-                (temp_dir / 'lora', M / 'Lora/tmp_lora'),
-                (temp_dir / 'controlnet', M / 'controlnet'),
-                (temp_dir / 'clip', M / 'clip'),
-                (temp_dir / 'unet', M / 'unet')
+                (TMP / 'ckpt', M / 'Stable-Diffusion/tmp_ckpt'),
+                (TMP / 'lora', M / 'Lora/tmp_lora'),
+                (TMP / 'controlnet', M / 'controlnet'),
+                (TMP / 'clip', M / 'clip'),
+                (TMP / 'unet', M / 'unet')
             ]
         }
     }
 
     cfg = configs.get(U)
-    [SyS(f'{cmd}') for cmd in cfg['sym']]
-    if U not in ['ComfyUI', 'SwarmUI']: [(M / d).mkdir(parents=True, exist_ok=True) for d in ['Lora', 'ESRGAN']]
-    [SyS(f'ln -s {src} {tg}') for src, tg in cfg['links']]
+    # Ejecutar limpiados
+    for cmd in cfg['sym']:
+        SyS(cmd)
+    # A1111/Forge/ReForge/Forge-Classic requieren carpetas extra
+    if U not in ['ComfyUI', 'SwarmUI']:
+        for d in ['Lora', 'ESRGAN']:
+            (M / d).mkdir(parents=True, exist_ok=True)
+    # Enlaces seguros
+    for src, tg in cfg['links']:
+        _safe_symlink(src, tg)
 
 def webui_req(U, W, M):
     CD(W)
@@ -359,7 +305,8 @@ def webui_req(U, W, M):
     ]
 
     line = scripts + upscalers
-    for item in line: download(item)
+    for item in line:
+        download(item)
 
     if U not in ['SwarmUI', 'ComfyUI']:
         e = 'jpg' if U == 'Forge-Classic' else 'png'
@@ -369,28 +316,32 @@ def webui_req(U, W, M):
             f'https://huggingface.co/gutris1/webui/resolve/main/misc/card-no-preview.png {W}/html card-no-preview.{e}',
             f'https://github.com/gutris1/segsmaker/raw/main/config/NoCrypt_miku.json {W}/tmp/gradio_themes',
             f'https://github.com/gutris1/segsmaker/raw/main/config/user.css {W} user.css'
-        ]: download(ass)
+        ]:
+            download(ass)
 
-        if U != 'Forge': download(f'https://github.com/gutris1/segsmaker/raw/main/config/config.json {W} config.json')
+        if U != 'Forge':
+            download(f'https://github.com/gutris1/segsmaker/raw/main/config/config.json {W} config.json')
 
 def webui_extension(U, W, M):
     EXT = W / 'custom_nodes' if U == 'ComfyUI' else W / 'extensions'
     CD(EXT)
 
     if U == 'ComfyUI':
-        say('<br><b>Installing Custom Nodes</b>')
+        say('<br><b>【{red} Installing Custom Nodes{d} 】{red}</b>')
         clone(str(W / 'asd/custom_nodes.txt'))
         print()
 
         for faces in [
             f'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth {M}/facerestore_models',
             f'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/GFPGANv1.4.pth {M}/facerestore_models'
-        ]: download(faces)
+        ]:
+            download(faces)
 
     else:
-        say('<br><b>Installing Extensions</b>')
+        say('<br><b>【{red} Installing Extensions{d} 】{red}</b>')
         clone(str(W / 'asd/extension.txt'))
-        if ENVNAME == 'Kaggle': clone('https://github.com/gutris1/sd-image-encryption')
+        if ENVNAME == 'Kaggle':
+            clone('https://github.com/gutris1/sd-image-encryption')
 
 def webui_installation(U, W):
     M = W / 'Models' if U == 'SwarmUI' else W / 'models'
@@ -404,39 +355,34 @@ def webui_installation(U, W):
         f'https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl.vae.safetensors {V} sdxl_vae.safetensors'
     ]
 
-    for i in extras: download(i)
+    for i in extras:
+        download(i)
     SyS(f"unzip -qo {W / 'embeddingsXL.zip'} -d {E} && rm {W / 'embeddingsXL.zip'}")
 
-    if U != 'SwarmUI': webui_extension(U, W, M)
+    if U != 'SwarmUI':
+        webui_extension(U, W, M)
 
 def webui_selection(ui):
     with output:
         output.clear_output(wait=True)
 
-        webui_dir = DRIVE_BASE / 'webui' if use_drive else HOME
-        WEBUI = webui_dir / ui
-        
-        if ui in REPO: repo = REPO[ui]
-        say(f'<b>Installing {WEBUI.name}</b>')
-        if use_drive:
-            say(f'<b>Installing in Google Drive: {WEBUI}</b>')
-        
+        if ui in REPO:
+            (WEBUI, repo) = (HOME / ui, REPO[ui])
+        say(f'<b>【{{red}} Installing {WEBUI.name}{{d}} 】{{red}}</b>')
         clone(repo)
 
         webui_installation(ui, WEBUI)
 
         with loading:
             loading.clear_output(wait=True)
-            say('<br><b>Done</b>')
+            say('<br><b>【{red} Done{d} 】{red}</b>')
             tempe()
             CD(HOME)
 
 def webui_installer():
-    webui_dir = DRIVE_BASE / 'webui' if use_drive else HOME
-    CD(webui_dir)
-    
+    CD(HOME)
     ui = (json.load(MARKED.open('r')) if MARKED.exists() else {}).get('ui')
-    WEBUI = webui_dir / ui if ui else None
+    WEBUI = HOME / ui if ui else None
 
     if WEBUI is not None and WEBUI.exists():
         git_dir = WEBUI / '.git'
@@ -450,67 +396,55 @@ def webui_installer():
                     SyS('git pull origin main')
                 elif ui == 'Forge-Classic':
                     SyS('git pull origin classic')
-                with loading: loading.clear_output()
+                with loading:
+                    loading.clear_output()
     else:
         try:
             webui_selection(webui)
         except KeyboardInterrupt:
-            with loading: loading.clear_output()
-            with output: print('\nCanceled.')
+            with loading:
+                loading.clear_output()
+            with output:
+                print('\nCanceled.')
         except Exception as e:
-            with loading: loading.clear_output()
-            with output: print(f'\n{ERROR}: {e}')
+            with loading:
+                loading.clear_output()
+            with output:
+                print(f'\n{ERROR}: {e}')
 
 def notebook_scripts():
-    scripts_dir = DRIVE_BASE / 'scripts' if use_drive else STR
-    scripts_dir.mkdir(parents=True, exist_ok=True)
-    
-    nenen_path = scripts_dir / 'nenen88.py'
-    melon_path = scripts_dir / 'melon00.py'
-    cupang_path = scripts_dir / 'cupang.py'
-    startup_path = scripts_dir / '00-startup.py'
-    
     z = [
-        (startup_path, f'wget -qO {startup_path} https://github.com/gutris1/segsmaker/raw/main/script/KC/00-startup.py'),
-        (nenen_path, f'wget -qO {nenen_path} https://github.com/gutris1/segsmaker/raw/main/script/nenen88.py'),
-        (melon_path, f'wget -qO {melon_path} https://github.com/gutris1/segsmaker/raw/main/script/melon00.py'),
-        (cupang_path, f'wget -qO {cupang_path} https://github.com/gutris1/segsmaker/raw/main/script/cupang.py'),
+        (STR / '00-startup.py', f'wget -qO {STR}/00-startup.py https://github.com/gutris1/segsmaker/raw/main/script/KC/00-startup.py'),
+        (nenen, f'wget -qO {nenen} https://github.com/gutris1/segsmaker/raw/main/script/nenen88.py'),
+        (melon, f'wget -qO {melon} https://github.com/gutris1/segsmaker/raw/main/script/melon00.py'),
+        (STR / 'cupang.py', f'wget -qO {STR}/cupang.py https://github.com/gutris1/segsmaker/raw/main/script/cupang.py'),
         (MRK, f'wget -qO {MRK} https://github.com/gutris1/segsmaker/raw/main/script/marking.py')
     ]
 
-    [SyS(y) for x, y in z if not Path(x).exists()]
+    for _p, cmd in z:
+        if not Path(_p).exists():
+            SyS(cmd)
 
-    base_path = DRIVE_BASE if use_drive else Path(ENVBASE)
-    home_path = DRIVE_BASE / 'webui' if use_drive else HOME
-    temp_path = DRIVE_BASE / 'temp' if use_drive else TMP
-    
     j = {
-        'ENVNAME': ENVNAME, 
-        'HOMEPATH': home_path, 
-        'TEMPPATH': temp_path, 
-        'BASEPATH': base_path,
-        'USE_DRIVE': use_drive,
-        'DRIVE_PATH': str(DRIVE_BASE) if use_drive else ''
+        'ENVNAME': ENVNAME,
+        'HOMEPATH': HOME,
+        'TEMPPATH': TMP,
+        'BASEPATH': Path(ENVBASE)
     }
-    text = '\n'.join(f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}" for k, v in j.items())
-    
-    kandang_path = scripts_dir / 'KANDANG.py'
-    kandang_path.write_text(text)
+    text = '\n'.join(f"{k} = '{v}'" for k, v in j.items())
+    Path(KANDANG).write_text(text)
 
     key_inject(civitai_key, hf_read_token)
     marking(SRC, MARKED, webui)
-    sys.path.append(str(scripts_dir))
+    sys.path.append(str(STR))
 
-    # Update global variables for script imports
-    global nenen, melon, KANDANG
-    nenen = nenen_path
-    melon = melon_path
-    KANDANG = kandang_path
-
-    for scripts in [nenen, melon, KANDANG, MRK]: 
+    for scripts in [nenen, melon, KANDANG, MRK]:
         get_ipython().run_line_magic('run', str(scripts))
 
-# Initialize environment
+# =======================
+#   INICIO DE EJECUCIÓN
+# =======================
+
 ENVNAME, ENVBASE, ENVHOME = getENV()
 
 if not ENVNAME:
@@ -525,52 +459,37 @@ ARROW = f'{ORANGE}▶{RESET}'
 ERROR = f'{PURPLE}[{RESET}{RED}ERROR{RESET}{PURPLE}]{RESET}'
 IMG = 'https://github.com/gutris1/segsmaker/raw/main/script/loading.png'
 
-# Parse arguments first to determine if using Drive
-webui, civitai_key, hf_read_token, use_drive, drive_path = getArgs()
-if civitai_key is None: sys.exit()
+HOME = Path(ENVHOME)
+TMP = Path(ENVBASE) / 'temp'
+PY = Path('/GUTRIS1')
 
-# Setup paths based on Drive usage
-if use_drive:
-    if not mount_drive():
-        print(f"{ERROR}: Failed to mount Google Drive. Falling back to local installation.")
-        use_drive = False
-
-if use_drive:
-    DRIVE_BASE = setup_drive_environment(drive_path)
-    HOME = DRIVE_BASE / 'webui'
-    TMP = DRIVE_BASE / 'temp'
-    SRC = DRIVE_BASE / 'scripts' / 'gutris1'
-else:
-    HOME = Path(ENVHOME)
-    TMP = Path(ENVBASE) / 'temp'
-    SRC = HOME / 'gutris1'
-
-# Create necessary directories
-HOME.mkdir(parents=True, exist_ok=True)
-TMP.mkdir(parents=True, exist_ok=True)
-SRC.mkdir(parents=True, exist_ok=True)
-
-# Setup remaining paths
+SRC = HOME / 'gutris1'
 MRK = SRC / 'marking.py'
 KEY = SRC / 'api-key.json'
 MARKED = SRC / 'marking.json'
 
 USR = Path('/usr/bin')
 STR = Path('/root/.ipython/profile_default/startup')
-
-# These will be updated in notebook_scripts() if using Drive
 nenen = STR / 'nenen88.py'
 melon = STR / 'melon00.py'
 KANDANG = STR / 'KANDANG.py'
 
+# Crear directorios necesarios
+TMP.mkdir(parents=True, exist_ok=True)
+SRC.mkdir(parents=True, exist_ok=True)
+
 output = widgets.Output()
 loading = widgets.Output()
 
+webui, civitai_key, hf_read_token = getArgs()
+if civitai_key is None:
+    sys.exit()
+
 display(output, loading)
-with loading: display(Image(url=IMG))
+with loading:
+    display(Image(url=IMG))
 with output:
-    if not (DRIVE_BASE / 'python_env' if use_drive else Path('/GUTRIS1')).exists():
-        getPython()
+    PY.exists() or getPython()
 
 notebook_scripts()
 
