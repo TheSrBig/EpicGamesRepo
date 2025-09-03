@@ -95,16 +95,33 @@ def getPython():
     CD(ENVBASE)
     print(f"\n{ARROW} Setting up Python environment in Drive")
 
-    # Instalar herramientas necesarias
-    SyS('apt-get -qq -y install aria2 pv lz4 >/dev/null 2>&1')
+    # Verificar e instalar herramientas necesarias
+    print(f"{ARROW} Verificando dependencias del sistema...")
+    dependencies = ['aria2', 'pv', 'lz4']
+    for dep in dependencies:
+        check_cmd = f'which {dep}'
+        result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Instalando {dep}...")
+            SyS(f'apt-get update -qq && apt-get install -y -qq {dep}')
+    
+    # Verificar que aria2c esté disponible antes de usarlo
+    check_aria = subprocess.run('which aria2c', shell=True, capture_output=True, text=True)
+    if check_aria.returncode != 0:
+        print("Error: aria2c no está disponible. Usando wget como alternativa...")
+        SyS(f'wget -O {fn} {url}')
+    else:
+        # Descargar con aria2c
+        aria = f'aria2c --console-log-level=error --stderr=true -c -x16 -s16 -k1M -j5 {url} -o {fn}'
+        p = subprocess.Popen(shlex.split(aria), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        p.wait()
 
-    # Descargar y extraer paquetes adicionales en Drive
-    aria = f'aria2c --console-log-level=error --stderr=true -c -x16 -s16 -k1M -j5 {url} -o {fn}'
-    p = subprocess.Popen(shlex.split(aria), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    p.wait()
-
-    SyS(f'pv {fn} | lz4 -d | tar -xf -')
-    Path(fn).unlink()
+    # Verificar que el archivo se descargó
+    if Path(fn).exists():
+        SyS(f'pv {fn} | lz4 -d | tar -xf -')
+        Path(fn).unlink()
+    else:
+        print(f"Error: No se pudo descargar {fn}")
 
     # Añadir tanto el sistema como Drive al path de Python
     sys.path.insert(0, PKG_DRIVE)
@@ -139,6 +156,11 @@ def install_tunnel():
     tunnel_dir = Path('/tmp/tunnels')
     tunnel_dir.mkdir(exist_ok=True)
     
+    # Verificar que wget esté disponible
+    check_wget = subprocess.run('which wget', shell=True, capture_output=True, text=True)
+    if check_wget.returncode != 0:
+        SyS('apt-get update -qq && apt-get install -y -qq wget')
+    
     SyS(f'wget -qO {tunnel_dir}/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64')
     SyS(f'chmod +x {tunnel_dir}/cl')
     
@@ -162,10 +184,13 @@ def install_tunnel():
         url = b['url']
         name = Path(url).name
 
-        SyS(f'wget -qO {tunnel_dir}/{name} {url}')
-        SyS(f'tar -xzf {tunnel_dir}/{name} -C {tunnel_dir}')
-        SyS(f'rm -f {tunnel_dir}/{name}')
-        SyS(f'ln -sf {tunnel_dir}/{n} /usr/bin/{n}')
+        try:
+            SyS(f'wget -qO {tunnel_dir}/{name} {url}')
+            SyS(f'tar -xzf {tunnel_dir}/{name} -C {tunnel_dir}')
+            SyS(f'rm -f {tunnel_dir}/{name}')
+            SyS(f'ln -sf {tunnel_dir}/{n} /usr/bin/{n}')
+        except Exception as e:
+            print(f"Error instalando {n}: {e}")
 
 def sym_link(U, M):
     configs = {
